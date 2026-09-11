@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Spatium — 時空間レイアウト</title>
+    <link rel="icon" href="favicon.svg" />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header>
+      <strong>▦ Spatium <small>LAYOUT STUDIO</small></strong>
+      <nav>
+        <button id="new">新規</button><button id="open">開く</button
+        ><button id="save">保存</button><button id="export">PNG出力</button
+        ><span class="divider"></span><button id="undo">↶ 元に戻す</button
+        ><button id="redo">↷ やり直す</button>
+      </nav>
+      <span id="dirty">保存済み</span>
+    </header>
+    <main>
+      <section class="workspace">
+        <div class="canvasbar">
+          <div>
+            <button id="add" class="primary">＋ 配置物</button
+            ><button id="fixed">固定物を編集</button>
+          </div>
+          <div>
+            <button id="out" aria-label="縮小">−</button
+            ><span id="zoom">100%</span
+            ><button id="in" aria-label="拡大">＋</button
+            ><button id="fit">全体表示</button>
+          </div>
+        </div>
+        <div id="viewport">
+          <svg
+            id="canvas"
+            xmlns="http://www.w3.org/2000/svg"
+            aria-label="レイアウトキャンバス"
+          ></svg>
+        </div>
+        <div class="status">
+          <span id="status">背景画像を読み込み、縮尺を設定してください。</span
+          ><span>mm / グリッドスナップ</span>
+        </div>
+      </section>
+      <aside id="properties"></aside>
+      <section class="timeline">
+        <div class="timelinebar">
+          <strong>タイムライン</strong
+          ><button id="duplicate-stage">＋ 時点を複製</button
+          ><button id="rename-stage">名前を変更</button
+          ><button id="left-stage">←</button><button id="right-stage">→</button
+          ><button id="delete-stage">時点を削除</button>
+        </div>
+        <div id="tracks"></div>
+      </section>
+    </main>
+    <input
+      id="image-file"
+      type="file"
+      accept="image/png,image/jpeg"
+      hidden
+    /><input
+      id="project-file"
+      type="file"
+      accept=".json,application/json"
+      hidden
+    />
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

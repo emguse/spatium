@@ -1,0 +1,11 @@
+{
+  "name": "spatium",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node server.mjs",
+    "test": "node --test",
+    "check": "node --check dist/app.js && node --check dist/model.js"
+  }
+}
