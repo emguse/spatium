@@ -47,11 +47,18 @@
       <aside id="properties"></aside>
       <section class="timeline">
         <div class="timelinebar">
-          <strong>タイムライン</strong
-          ><button id="duplicate-stage">＋ 時点を複製</button
-          ><button id="rename-stage">名前を変更</button
-          ><button id="left-stage">←</button><button id="right-stage">→</button
-          ><button id="delete-stage">時点を削除</button>
+          <strong>タイムライン</strong>
+          <label for="selected-date">表示日</label>
+          <input
+            id="selected-date"
+            type="date"
+            min="0001-01-01"
+            max="9999-12-31"
+            required
+          />
+          <span class="timeline-legend"
+            >変更日の等間隔表示 · 帯：存在期間 / ◆：位置変更 / 終：終了日</span
+          >
         </div>
         <div id="tracks"></div>
       </section>

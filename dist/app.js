@@ -4,7 +4,13 @@ import {
   locked,
   snap,
   calibratedScale,
-  duplicateStage,
+  today,
+  isDate,
+  positionAt,
+  changeDates,
+  setPosition,
+  setPeriod,
+  removeKeyframe,
   createEntity,
   duplicateEntity,
   bounds,
@@ -25,7 +31,7 @@ const $ = (s) => document.querySelector(s),
         })[c],
     );
 let history = new History(fresh()),
-  stageId = history.current.stages[0].id,
+  selectedDate = today(),
   selection = null,
   fixedMode = false,
   mode = null,
@@ -34,7 +40,6 @@ let history = new History(fresh()),
   view = null,
   drag = null;
 const p = () => history.current,
-  stage = () => p().stages.find((s) => s.id === stageId),
   svg = $("#canvas");
 function message(text) {
   $("#status").textContent = text;
@@ -45,7 +50,7 @@ function report(error) {
 }
 function update(fn) {
   const oldSelection = selection,
-    oldStageId = stageId;
+    oldDate = selectedDate;
   try {
     const next = clone(p());
     fn(next);
@@ -53,7 +58,7 @@ function update(fn) {
     render();
   } catch (e) {
     selection = oldSelection;
-    stageId = oldStageId;
+    selectedDate = oldDate;
     render();
     report(e);
   }
@@ -67,7 +72,7 @@ function selected() {
 }
 function position() {
   const e = selected();
-  return !e ? null : selection.fixed ? e : stage().positions[e.id];
+  return !e ? null : selection.fixed ? e : positionAt(e, selectedDate);
 }
 function editable() {
   return selection && selection.fixed === fixedMode;
@@ -77,7 +82,7 @@ function cancelMode() {
   points = [];
 }
 function render() {
-  if (!p().stages.some((s) => s.id === stageId)) stageId = p().stages[0].id;
+  $("#selected-date").value = selectedDate;
   if (!selected()) selection = null;
   $("#dirty").textContent = history.dirty ? "● 未保存" : "保存済み";
   $("#undo").disabled = !history.past.length;
@@ -86,9 +91,6 @@ function render() {
   $("#add").textContent = fixedMode ? "＋ 固定物" : "＋ 配置物";
   $("#fixed").classList.toggle("active", fixedMode);
   $("#fixed").textContent = fixedMode ? "固定物編集中" : "固定物を編集";
-  $("#delete-stage").disabled = p().stages.length === 1;
-  $("#left-stage").disabled = stageId === p().stages[0].id;
-  $("#right-stage").disabled = stageId === p().stages.at(-1).id;
   $("#export").disabled = !p().background;
   renderCanvas();
   renderProperties();
@@ -96,7 +98,7 @@ function render() {
 }
 function renderCanvas() {
   const project = p(),
-    b = bounds(project, stageId),
+    b = bounds(project, selectedDate),
     pad = project.grid.size * 2;
   view = {
     x: b.minX - pad,
@@ -120,7 +122,7 @@ function renderCanvas() {
   html += `<defs><pattern id="grid" x="${g.origin.x}" y="${g.origin.y}" width="${displayGrid}" height="${displayGrid}" patternUnits="userSpaceOnUse"><path d="M ${displayGrid} 0 H 0 V ${displayGrid}" fill="none" stroke="#597d923d" stroke-width="${1 / zoom}"/></pattern></defs><rect x="${view.x}" y="${view.y}" width="${view.w}" height="${view.h}" fill="url(#grid)"/>`;
   for (const isFixed of [true, false])
     for (const e of isFixed ? project.fixed : project.entities) {
-      const pos = isFixed ? e : stage().positions[e.id];
+      const pos = isFixed ? e : positionAt(e, selectedDate);
       if (!pos) continue;
       const active = selection?.id === e.id;
       const x = g.origin.x + pos.x,
@@ -143,24 +145,66 @@ function renderProperties() {
     pos = position();
   if (e) {
     const disabled = editable() ? "" : "disabled";
-    $("#properties").innerHTML =
-      `<h2>${selection.fixed ? "固定物" : "配置物"}のプロパティ</h2><span class="badge">${selection.fixed ? "全時点で共通" : pos ? "この時点に配置済み" : "この時点では不在"}</span>${field("名称（全時点共通）", "name", e.name, "text", `${disabled} maxlength="200"`)}<div class="pair">${field("幅（mm）", "width", e.width, "number", `${disabled} min="${p().grid.size}" step="${p().grid.size}"`)}${field("奥行き（mm）", "depth", e.depth, "number", `${disabled} min="${p().grid.size}" step="${p().grid.size}"`)}</div>${field("色（全時点共通）", "color", e.color, "color", disabled)}<label for="memo">メモ（全時点共通）</label><textarea id="memo" maxlength="10000" ${disabled}>${esc(e.memo)}</textarea>${pos ? `<h3>${selection.fixed ? "共通の位置" : "この時点の位置"}</h3><div class="pair">${field("X（mm）", "x", pos.x, "number", `${disabled} step="${p().grid.size}"`)}${field("Y（mm）", "y", pos.y, "number", `${disabled} step="${p().grid.size}"`)}</div>` : ""}<div class="actions">${!pos ? `<button id="place" class="primary" ${disabled}>この時点に配置</button>` : `<button id="copy" ${disabled}>複製</button><button id="remove" class="danger" ${disabled}>${selection.fixed ? "固定物を削除" : "この時点から除去"}</button>`}<button id="deselect">図面の設定</button></div><p class="hint">${!editable() ? "編集モードを切り替えると変更できます。" : "属性の変更は全時点に反映されます。位置はグリッド原点からの距離です。"}</p>`;
-    for (const key of ["name", "width", "depth", "color", "memo", "x", "y"]) {
+    const isFixed = selection.fixed;
+    const hasFrame =
+      !isFixed && e.positionKeyframes.some((k) => k.date === selectedDate);
+    const period = isFixed
+      ? ""
+      : `
+      <h3>存在期間</h3>
+      ${field("開始日（この日から存在）", "start-date", e.startDate, "date", `${disabled} min="0001-01-01" max="9999-12-31"`)}
+      ${field("終了日（この日まで存在）", "end-date", e.endDate ?? "", "date", `${disabled} min="0001-01-01" max="9999-12-31"`)}
+      <p class="hint">終了日が空欄なら無期限です。途中の退場・再登場は別の配置物で表します。</p>`;
+    $("#properties").innerHTML = `
+      <h2>${isFixed ? "固定物" : "配置物"}のプロパティ</h2>
+      <span class="badge">${isFixed ? "全期間で共通" : pos ? "選択日に存在" : "選択日は存在期間外"}</span>
+      ${period}
+      ${field("名称（全期間共通）", "name", e.name, "text", `${disabled} maxlength="200"`)}
+      <div class="pair">${field("幅（mm）", "width", e.width, "number", `${disabled} min="${p().grid.size}" step="${p().grid.size}"`)}${field("奥行き（mm）", "depth", e.depth, "number", `${disabled} min="${p().grid.size}" step="${p().grid.size}"`)}</div>
+      ${field("色（全期間共通）", "color", e.color, "color", disabled)}
+      <label for="memo">メモ（全期間共通）</label><textarea id="memo" maxlength="10000" ${disabled}>${esc(e.memo)}</textarea>
+      <h3>${isFixed ? "共通の位置" : selectedDate + " の位置"}</h3>
+      <div class="pair">${field("X（mm）", "x", pos?.x ?? "", "number", `${disabled} ${!pos ? "disabled" : ""} step="${p().grid.size}"`)}${field("Y（mm）", "y", pos?.y ?? "", "number", `${disabled} ${!pos ? "disabled" : ""} step="${p().grid.size}"`)}</div>
+      ${!isFixed ? `<p class="hint">${!pos ? "位置を編集するには、存在期間内の日付を選択するか、存在期間を変更してください。" : hasFrame ? "この日に位置キーフレームがあります。変更は次の位置変更日まで反映されます。" : "直前の位置を引き継いでいます。移動すると、この日にキーフレームを作成します。"}</p>` : ""}
+      <div class="actions"><button id="copy" ${disabled} ${!pos ? "disabled" : ""}>複製</button>
+      ${!isFixed ? `<button id="end-here" ${disabled} ${!pos ? "disabled" : ""}>この日まで存在</button><button id="remove-keyframe" ${disabled} ${!hasFrame || selectedDate === e.startDate ? "disabled" : ""}>選択日の位置変更を削除</button>` : ""}
+      <button id="remove" class="danger" ${disabled}>${isFixed ? "固定物を削除" : "配置物を全期間から削除"}</button>
+      <button id="deselect">図面の設定</button></div>
+      <p class="hint">${!editable() ? "編集モードを切り替えると変更できます。" : "属性の変更は全期間に反映されます。位置はグリッド原点からの距離です。"}</p>`;
+    for (const key of [
+      "name",
+      "width",
+      "depth",
+      "color",
+      "memo",
+      "x",
+      "y",
+      "start-date",
+      "end-date",
+    ]) {
       const input = $("#" + key);
       if (!input) continue;
       input.onchange = () =>
         update((next) => {
-          const item = (selection.fixed ? next.fixed : next.entities).find(
+          const item = (isFixed ? next.fixed : next.entities).find(
             (v) => v.id === e.id,
           );
-          if (["x", "y"].includes(key)) {
-            const target = selection.fixed
-              ? item
-              : next.stages.find((s) => s.id === stageId).positions[e.id];
+          if (key === "start-date" || key === "end-date") {
+            setPeriod(
+              item,
+              key === "start-date" ? input.value : item.startDate,
+              key === "end-date" ? input.value || null : item.endDate,
+            );
+          } else if (["x", "y"].includes(key)) {
             const n = Number(input.value);
             if (!input.value.trim() || !Number.isFinite(n))
               throw Error("数値を入力してください。");
-            target[key] = snap(n, next.grid.size);
+            if (isFixed) item[key] = snap(n, next.grid.size);
+            else
+              setPosition(item, selectedDate, {
+                ...positionAt(item, selectedDate),
+                [key]: snap(n, next.grid.size),
+              });
           } else if (["width", "depth"].includes(key)) {
             const n = Number(input.value);
             if (!Number.isFinite(n) || n <= 0)
@@ -176,18 +220,26 @@ function renderProperties() {
     bind("copy", () =>
       update((next) => {
         selection = {
-          id: duplicateEntity(next, stageId, e.id, selection.fixed),
-          fixed: selection.fixed,
+          id: duplicateEntity(next, selectedDate, e.id, isFixed),
+          fixed: isFixed,
         };
       }),
     );
     bind("remove", removeSelected);
-    bind("place", () => {
-      mode = "place";
-      message(
-        "キャンバスをクリックして配置してください。Escでキャンセルできます。",
-      );
-    });
+    bind("end-here", () =>
+      update((next) => {
+        const item = next.entities.find((v) => v.id === e.id);
+        setPeriod(item, item.startDate, selectedDate);
+      }),
+    );
+    bind("remove-keyframe", () =>
+      update((next) =>
+        removeKeyframe(
+          next.entities.find((v) => v.id === e.id),
+          selectedDate,
+        ),
+      ),
+    );
     bind("deselect", () => {
       selection = null;
       cancelMode();
@@ -198,7 +250,7 @@ function renderProperties() {
   const isLocked = locked(p()),
     bg = p().background;
   $("#properties").innerHTML =
-    `<h2>図面の設定</h2><button id="load-image" ${isLocked ? "disabled" : ""}>${bg ? "背景画像を変更" : "背景画像を読み込む"}</button><p class="hint">PNG・JPEG / 画像は端末内で処理</p>${bg ? `<p>${esc(bg.name)}<br><span class="hint">${bg.width} × ${bg.height} px</span></p><span class="badge">${bg.calibrated ? "校正済み" : "縮尺の設定が必要"}</span><div class="actions"><button id="calibrate" ${isLocked ? "disabled" : ""}>2点で縮尺を設定</button></div><p class="hint">既知の距離の両端をクリックします。</p>` : "<p>まず背景図面を読み込み、実寸法に合わせてください。</p>"}<h3>グリッド</h3>${field("間隔（mm）", "grid-size", p().grid.size, "number", `min="0.001" step="any" ${isLocked ? "disabled" : ""}`)}<div class="actions"><button id="origin" ${isLocked || !bg?.calibrated ? "disabled" : ""}>原点を図面上で指定</button></div><p class="hint">原点：${p().grid.origin.x.toFixed(1)}, ${p().grid.origin.y.toFixed(1)} mm<br>${isLocked ? "配置物があるため、背景・縮尺・グリッドは固定されています。" : "配置を始める前に設定してください。"}</p><h3>操作</h3><p class="hint">ドラッグで移動 / Deleteで除去<br>Ctrl・⌘ + Zで元に戻す<br>Ctrl・⌘ + Sで保存<br>Escで操作をキャンセル</p>`;
+    `<h2>図面の設定</h2><button id="load-image" ${isLocked ? "disabled" : ""}>${bg ? "背景画像を変更" : "背景画像を読み込む"}</button><p class="hint">PNG・JPEG / 画像は端末内で処理</p>${bg ? `<p>${esc(bg.name)}<br><span class="hint">${bg.width} × ${bg.height} px</span></p><span class="badge">${bg.calibrated ? "校正済み" : "縮尺の設定が必要"}</span><div class="actions"><button id="calibrate" ${isLocked ? "disabled" : ""}>2点で縮尺を設定</button></div><p class="hint">既知の距離の両端をクリックします。</p>` : "<p>まず背景図面を読み込み、実寸法に合わせてください。</p>"}<h3>グリッド</h3>${field("間隔（mm）", "grid-size", p().grid.size, "number", `min="0.001" step="any" ${isLocked ? "disabled" : ""}`)}<div class="actions"><button id="origin" ${isLocked || !bg?.calibrated ? "disabled" : ""}>原点を図面上で指定</button></div><p class="hint">原点：${p().grid.origin.x.toFixed(1)}, ${p().grid.origin.y.toFixed(1)} mm<br>${isLocked ? "配置物があるため、背景・縮尺・グリッドは固定されています。" : "配置を始める前に設定してください。"}</p><h3>操作</h3><p class="hint">ドラッグで移動 / Deleteで全期間から削除<br>Ctrl・⌘ + Zで元に戻す<br>Ctrl・⌘ + Sで保存<br>Escで操作をキャンセル</p>`;
   bind("load-image", () => $("#image-file").click());
   bind("calibrate", () => {
     mode = "calibrate";
@@ -218,23 +270,49 @@ function renderProperties() {
       next.grid.size = n;
     });
 }
+function selectDate(date) {
+  if (!isDate(date)) {
+    $("#selected-date").value = selectedDate;
+    report(Error("有効な日付を選択してください。"));
+    return;
+  }
+  drag = null;
+  cancelMode();
+  selectedDate = date;
+  render();
+  message(`${date} の配置を表示しています。`);
+}
+$("#selected-date").onchange = (event) => selectDate(event.target.value);
 function renderTracks() {
-  const project = p();
+  const project = p(),
+    changes = changeDates(project),
+    dates = [...new Set([...changes, selectedDate])].sort();
   $("#tracks").innerHTML =
-    `<table><thead><tr><th>配置物 / ${project.entities.length}</th>${project.stages.map((s) => `<th class="${s.id === stageId ? "selected" : ""}"><button data-stage="${s.id}">${esc(s.label)}</button></th>`).join("")}</tr></thead><tbody>${project.entities.map((e) => `<tr><td>${esc(e.name)}</td>${project.stages.map((s) => `<td class="${s.id === stageId ? "selected" : ""}"><button data-stage="${s.id}" data-entity="${e.id}" class="${s.positions[e.id] ? "present" : ""}" aria-label="${esc(e.name)}、${esc(s.label)}、${s.positions[e.id] ? "配置済み" : "不在"}" aria-pressed="${selection?.id === e.id && s.id === stageId}">${s.positions[e.id] ? "◆" : "—"}</button></td>`).join("")}</tr>`).join("")}</tbody></table>${!project.entities.length ? '<div class="empty">配置物を作成すると、時点ごとの存在をここで確認できます。</div>' : ""}`;
+    `<table><thead><tr><th>配置物 / ${project.entities.length}</th>${dates.map((date) => `<th class="${date === selectedDate ? "selected" : ""}"><button data-date="${date}">${date}${!changes.includes(date) ? '<span class="date-note">選択日</span>' : ""}</button></th>`).join("")}</tr></thead><tbody>${project.entities
+      .map(
+        (e) =>
+          `<tr><td>${esc(e.name)}</td>${dates
+            .map((date) => {
+              const exists = !!positionAt(e, date),
+                keyframe = e.positionKeyframes.some((k) => k.date === date),
+                ending = e.endDate === date;
+              return `<td class="${date === selectedDate ? "selected" : ""}"><button data-date="${date}" data-entity="${e.id}" data-keyframe="${keyframe}" data-ending="${ending}" class="life-cell ${exists ? "present" : ""}" aria-label="${esc(e.name)}、${date}、${exists ? (keyframe ? "位置キーフレーム" : "存在・位置を継承") : "不在"}${ending ? "、終了日" : ""}" aria-pressed="${selection?.id === e.id && date === selectedDate}">${exists ? '<span class="life-band" aria-hidden="true"></span>' : ""}<span class="frame-marker">${keyframe ? "◆" : exists ? "" : "—"}${ending ? '<span class="end-marker">終</span>' : ""}</span></button></td>`;
+            })
+            .join("")}</tr>`,
+      )
+      .join(
+        "",
+      )}</tbody></table>${!project.entities.length ? '<div class="empty">日付を選んで配置物を作成すると、存在期間と位置変更が表示されます。</div>' : ""}`;
   $("#tracks")
-    .querySelectorAll("[data-stage]")
+    .querySelectorAll("[data-date]")
     .forEach(
       (btn) =>
         (btn.onclick = () => {
-          cancelMode();
-          stageId = btn.dataset.stage;
           if (btn.dataset.entity) {
             fixedMode = false;
             selection = { id: btn.dataset.entity, fixed: false };
           }
-          render();
-          message(stage().label);
+          selectDate(btn.dataset.date);
         }),
     );
 }
@@ -274,15 +352,6 @@ svg.addEventListener("pointerdown", (event) => {
       });
       cancelMode();
       message("グリッド原点を設定しました。");
-    } else if (mode === "place") {
-      update((next) => {
-        next.stages.find((s) => s.id === stageId).positions[selection.id] = {
-          x: snap(pt.x - next.grid.origin.x, next.grid.size),
-          y: snap(pt.y - next.grid.origin.y, next.grid.size),
-        };
-      });
-      cancelMode();
-      message("この時点に配置しました。");
     }
     return;
   }
@@ -326,10 +395,17 @@ svg.addEventListener("pointerup", () => {
   const nextPos = drag.next;
   drag = null;
   update((next) => {
-    const target = selection.fixed
-      ? next.fixed.find((e) => e.id === selection.id)
-      : next.stages.find((s) => s.id === stageId).positions[selection.id];
-    Object.assign(target, nextPos);
+    if (selection.fixed)
+      Object.assign(
+        next.fixed.find((e) => e.id === selection.id),
+        nextPos,
+      );
+    else
+      setPosition(
+        next.entities.find((e) => e.id === selection.id),
+        selectedDate,
+        nextPos,
+      );
   });
 });
 svg.addEventListener("pointercancel", () => {
@@ -338,15 +414,16 @@ svg.addEventListener("pointercancel", () => {
 });
 function removeSelected() {
   if (!selected() || !editable()) return;
+  if (!confirm(`「${selected().name}」を全期間から削除しますか？`)) return;
+  cancelMode();
   update((next) => {
     if (selection.fixed)
       next.fixed = next.fixed.filter((e) => e.id !== selection.id);
-    else
-      delete next.stages.find((s) => s.id === stageId).positions[selection.id];
+    else next.entities = next.entities.filter((e) => e.id !== selection.id);
   });
 }
 function fit() {
-  const b = bounds(p(), stageId),
+  const b = bounds(p(), selectedDate),
     box = $("#viewport");
   zoom = Math.min(
     (box.clientWidth - 32) / (b.width + p().grid.size * 4),
@@ -370,15 +447,15 @@ bind("fixed", () => {
   render();
   message(
     fixedMode
-      ? "固定物の変更は全時点に反映されます。"
-      : "配置物の位置は選択中の時点だけに反映されます。",
+      ? "固定物の変更は全期間に反映されます。"
+      : "配置物を移動すると、選択日から次の位置変更日まで反映されます。",
   );
 });
 bind("add", () => {
   cancelMode();
   update((next) => {
     selection = {
-      id: createEntity(next, stageId, fixedMode),
+      id: createEntity(next, selectedDate, fixedMode),
       fixed: fixedMode,
     };
   });
@@ -396,42 +473,6 @@ bind("redo", () => {
   history.redo();
   render();
 });
-bind("duplicate-stage", () => {
-  cancelMode();
-  update((next) => {
-    stageId = duplicateStage(
-      next,
-      next.stages.findIndex((s) => s.id === stageId),
-    );
-  });
-});
-bind("rename-stage", () => {
-  const label = prompt("時点の名前・日付", stage().label);
-  if (label !== null)
-    update((next) => {
-      next.stages.find((s) => s.id === stageId).label = label;
-    });
-});
-function moveStage(offset) {
-  update((next) => {
-    const i = next.stages.findIndex((s) => s.id === stageId),
-      j = i + offset;
-    if (j < 0 || j >= next.stages.length) return;
-    [next.stages[i], next.stages[j]] = [next.stages[j], next.stages[i]];
-  });
-}
-bind("left-stage", () => moveStage(-1));
-bind("right-stage", () => moveStage(1));
-bind("delete-stage", () => {
-  if (p().stages.length < 2 || !confirm(`「${stage().label}」を削除しますか？`))
-    return;
-  cancelMode();
-  update((next) => {
-    const i = next.stages.findIndex((s) => s.id === stageId);
-    next.stages.splice(i, 1);
-    stageId = next.stages[Math.max(0, i - 1)].id;
-  });
-});
 function canReplace() {
   return (
     !history.dirty || confirm("未保存の変更があります。破棄して続けますか？")
@@ -439,7 +480,7 @@ function canReplace() {
 }
 function replace(project) {
   history = new History(project);
-  stageId = project.stages[0].id;
+  selectedDate = changeDates(project)[0] || today();
   selection = null;
   fixedMode = false;
   cancelMode();
@@ -549,7 +590,7 @@ $("#project-file").onchange = async (event) => {
 };
 bind("export", async () => {
   const snapshot = clone(p()),
-    current = stageId;
+    current = selectedDate;
   try {
     const b = bounds(snapshot, current),
       padding = 24,
@@ -568,12 +609,7 @@ bind("export", async () => {
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#193446";
     ctx.font = "16px sans-serif";
-    ctx.fillText(
-      snapshot.stages.find((s) => s.id === current).label,
-      padding,
-      26,
-      canvas.width - padding * 2,
-    );
+    ctx.fillText(current, padding, 26, canvas.width - padding * 2);
     ctx.translate(
       padding - b.minX * scale,
       padding + titleHeight - b.minY * scale,
@@ -587,10 +623,9 @@ bind("export", async () => {
       bg.width * bg.mmPerPixel * scale,
       bg.height * bg.mmPerPixel * scale,
     );
-    const positions = snapshot.stages.find((s) => s.id === current).positions;
     for (const isFixed of [true, false])
       for (const e of isFixed ? snapshot.fixed : snapshot.entities) {
-        const pos = isFixed ? e : positions[e.id];
+        const pos = isFixed ? e : positionAt(e, current);
         if (!pos) continue;
         const x = (snapshot.grid.origin.x + pos.x) * scale,
           y = (snapshot.grid.origin.y + pos.y) * scale,
@@ -618,8 +653,8 @@ bind("export", async () => {
       canvas.toBlob(resolve, "image/png"),
     );
     if (!blob) throw Error("PNGを生成できませんでした。");
-    download(blob, "spatium-layout.png");
-    message("選択中の時点をPNGで出力しました。");
+    download(blob, `spatium-layout-${current}.png`);
+    message("選択中の日付の配置をPNGで出力しました。");
   } catch (e) {
     report(e);
   }
@@ -661,7 +696,7 @@ if (document.modelContext?.registerTool) {
       document.modelContext.registerTool({
         name: "read_spatium_layout",
         description:
-          "Read the currently selected layout stage and entity counts.",
+          "Read the selected date, existence periods, and evaluated layout positions.",
         inputSchema: {
           type: "object",
           properties: {},
@@ -672,11 +707,13 @@ if (document.modelContext?.registerTool) {
           if (!input || typeof input !== "object" || Object.keys(input).length)
             throw Error("Expected empty object");
           return {
-            stage: { id: stage().id, label: stage().label },
+            date: selectedDate,
             entities: p().entities.map((e) => ({
               id: e.id,
               name: e.name,
-              position: stage().positions[e.id] || null,
+              startDate: e.startDate,
+              endDate: e.endDate,
+              position: positionAt(e, selectedDate) || null,
             })),
             fixedCount: p().fixed.length,
           };

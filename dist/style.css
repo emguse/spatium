@@ -295,3 +295,50 @@ button:disabled:hover {
 header button:disabled:hover {
   background: #21495d;
 }
+.timelinebar label {
+  margin: 0;
+  white-space: nowrap;
+}
+.timelinebar input[type="date"] {
+  width: 160px;
+}
+.timeline-legend {
+  margin-left: auto;
+  color: #526b7b;
+  font-size: 12px;
+}
+.timelinebar strong {
+  margin-right: 12px;
+}
+.life-cell {
+  position: relative;
+}
+.life-band {
+  position: absolute;
+  top: calc(50% - 4px);
+  left: 0;
+  right: 0;
+  height: 8px;
+  background: #a8dace;
+  pointer-events: none;
+}
+.frame-marker {
+  position: relative;
+  z-index: 1;
+}
+.date-note {
+  display: block;
+  color: #526b7b;
+  font-size: 12px;
+  font-weight: normal;
+}
+.end-marker {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  border-radius: 3px;
+  background: #176e67;
+  color: white;
+  font-size: 12px;
+  line-height: 20px;
+}
