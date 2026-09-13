@@ -78,3 +78,11 @@ Playwrightをローカル依存として導入しない場合は `PLAYWRIGHT_MOD
 ## 対象範囲
 
 同じ配置物の複数存在期間、回転、移動補間、自動再生、PDF、部品パレット、衝突判定、共同編集、3Dは含みません。PC・マウス・キーボードを対象にしています。実際の工場・倉庫図面による業務検証は、利用者の図面を使って実施してください。
+
+## GitHub Pages
+
+`main` へのpush時に `.github/workflows/pages.yml` がテストと構文チェックを行い、`dist/` だけをGitHub Pagesに公開します。ビルドや依存パッケージのインストールは不要です。GitHubの Settings → Pages → Source は **GitHub Actions** を使用します。Actionsから手動実行も可能です。
+
+公開先: https://emguse.github.io/spatium/
+
+読み込んだ図面・プロジェクトは引き続き利用者のブラウザー内で処理され、GitHubへアップロードされません。
