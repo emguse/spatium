@@ -18,6 +18,12 @@ MVPリリースは完成し、GitHub Pagesで公開しています。
 
 ## 起動
 
+### 非TLS環境向け試作（prototype/non-tls-uid）
+
+このブランチは `crypto.randomUUID()` を使用せず、時刻・ページ内の連番・`Math.random()` を組み合わせた UID を生成します。追加・複製時には配置物と固定物の既存 ID を確認し、読み込んだファイルとの重複も回避します。暗号学的な予測困難性や、別プロジェクト間での一意性は保証しません。UID は配置物の識別専用です。
+
+`dist/` を既存の HTTP サーバーで配信すれば、非 TLS の LAN アドレスでも UID を生成できます。付属の開発サーバーは従来どおりループバックのみで待ち受けます。JSON は version 2 のままで、従来の UUID を含むファイルも読み書きできます。
+
 Node.js 22以降で、依存パッケージのインストールなしに起動できます。
 
 ```sh
@@ -98,4 +104,3 @@ Playwrightをローカル依存として導入しない場合は `PLAYWRIGHT_MOD
 `main` へのpush時に `.github/workflows/pages.yml` がテストと構文チェックを行い、`dist/` だけをGitHub Pagesに公開します。ビルドや依存パッケージのインストールは不要です。GitHubの Settings → Pages → Source は **GitHub Actions** を使用します。Actionsから手動実行も可能です。
 
 公開先: https://emguse.github.io/spatium/
-

@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { runInNewContext } from "node:vm";
 import {
   fresh,
   clone,
@@ -37,6 +39,37 @@ const setup = () => {
   createEntity(p, "2026-10-01");
   return { p, e: p.entities[0] };
 };
+test("UIDs work without crypto and avoid imported IDs across both collections", () => {
+  // Evaluate in an isolated environment without any Web Crypto API.
+  const source = readFileSync(new URL("../dist/model.js", import.meta.url), "utf8")
+    .replace(/^export /gm, "");
+  const model = runInNewContext(`${source}\n({ id, createEntity, duplicateEntity });`, {
+    Date: { now: () => 0 },
+    Math: { random: () => 0 },
+    structuredClone,
+  });
+  const p = fixture();
+  createEntity(p, "2026-10-01", true);
+  p.fixed[0].id = "uid-0-1-";
+  const created = model.createEntity(p, "2026-10-01");
+  assert.notEqual(created, p.fixed[0].id);
+  const copied = model.duplicateEntity(p, "2026-10-01", created);
+  const fixedCopy = model.duplicateEntity(p, "2026-10-01", p.fixed[0].id, true);
+  assert.equal(new Set([created, copied, fixedCopy, p.fixed[0].id]).size, 4);
+  const restored = JSON.parse(JSON.stringify(p));
+  assert.deepEqual(validate(restored), restored);
+  const ids = Array.from({ length: 10000 }, () => model.id());
+  assert.equal(new Set(ids).size, ids.length);
+});
+
+test("legacy UUIDs survive a round trip alongside new UIDs", () => {
+  const { p, e } = setup();
+  e.id = "550e8400-e29b-41d4-a716-446655440000";
+  duplicateEntity(p, e.startDate, e.id);
+  assert.deepEqual(validate(JSON.parse(JSON.stringify(p))), p);
+  assert.equal(p.entities[0].id, e.id);
+  assert.match(p.entities[1].id, /^uid-/);
+});
 test("calibration and snapping retain physical dimensions", () => {
   assert.equal(calibratedScale({ x: 0, y: 0 }, { x: 300, y: 400 }, 5000), 10);
   assert.equal(

@@ -1,4 +1,15 @@
-export const id = () => crypto.randomUUID();
+let uidSequence = 0;
+// Local object identifiers only; not suitable for secrets or authentication.
+export function id() {
+  return `uid-${Date.now().toString(36)}-${(++uidSequence).toString(36)}-${Math.random().toString(36).slice(2)}`;
+}
+function projectId(p) {
+  const used = new Set([...p.entities, ...p.fixed].map((item) => item.id));
+  let candidate;
+  do candidate = id();
+  while (used.has(candidate));
+  return candidate;
+}
 export const clone = (value) => structuredClone(value);
 export function fresh() {
   return {
@@ -125,7 +136,7 @@ export function removeKeyframe(entity, date) {
 export function createEntity(p, date, isFixed = false) {
   if (!isDate(date)) throw Error("有効な日付を選択してください。");
   const item = {
-    id: id(),
+    id: projectId(p),
     name: isFixed ? "固定物" : "配置物",
     width: p.grid.size * 5,
     depth: p.grid.size * 3,
@@ -149,7 +160,7 @@ export function duplicateEntity(p, date, entityId, isFixed = false) {
   const pos = isFixed ? source : positionAt(source, date);
   if (!isDate(date) || !pos)
     throw Error("存在期間内の日付で複製してください。");
-  const copy = { ...clone(source), id: id(), name: source.name + "（コピー）" };
+  const copy = { ...clone(source), id: projectId(p), name: source.name + "（コピー）" };
   if (!isFixed) {
     copy.startDate = date;
     copy.endDate = null;
