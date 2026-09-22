@@ -30,6 +30,7 @@ button:disabled {
   cursor: default;
 }
 button:focus-visible,
+.github-link:focus-visible,
 input:focus-visible,
 textarea:focus-visible {
   outline: 3px solid #21a890;
@@ -70,10 +71,26 @@ header button {
   color: #fff;
   border-color: #3f6070;
 }
-#dirty {
+.header-meta {
+  display: flex;
+  align-items: center;
+  gap: 16px;
   margin-left: auto;
+}
+#dirty {
   font-size: 12px;
   white-space: nowrap;
+}
+.github-link {
+  color: #fff;
+  padding: 6px 4px;
+  border-radius: 5px;
+  white-space: nowrap;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.github-link:hover {
+  background: #315f72;
 }
 .divider {
   width: 12px;
