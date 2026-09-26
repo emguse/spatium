@@ -14,6 +14,7 @@ import {
   createEntity,
   duplicateEntity,
   bounds,
+  collisionsAt,
   validate,
   History,
 } from "./model.js";
@@ -99,7 +100,24 @@ function render() {
 function renderCanvas() {
   const project = p(),
     b = bounds(project, selectedDate),
+    collisions = collisionsAt(project, selectedDate),
+    partners = new Map(),
     pad = project.grid.size * 2;
+  const stamp = $("#collision-stamp");
+  stamp.hidden = collisions.length === 0;
+  stamp.textContent = collisions.length
+    ? `⚠ 干渉発生中 · ${collisions.length}組`
+    : "";
+  stamp.setAttribute(
+    "aria-label",
+    collisions.length
+      ? `${selectedDate}、干渉発生中、重なり${collisions.length}組`
+      : "",
+  );
+  for (const collision of collisions) {
+    partners.set(collision.aId, [...(partners.get(collision.aId) || []), collision.bName]);
+    partners.set(collision.bId, [...(partners.get(collision.bId) || []), collision.aName]);
+  }
   view = {
     x: b.minX - pad,
     y: b.minY - pad,
@@ -125,9 +143,14 @@ function renderCanvas() {
       const pos = isFixed ? e : positionAt(e, selectedDate);
       if (!pos) continue;
       const active = selection?.id === e.id;
+      const collidingPartners = partners.get(e.id) || [];
+      const colliding = collidingPartners.length > 0;
       const x = g.origin.x + pos.x,
         y = g.origin.y + pos.y;
-      html += `<g data-id="${e.id}" data-fixed="${isFixed}" class="entity ${isFixed !== fixedMode ? "locked" : ""}" transform="translate(${x} ${y})"><rect width="${e.width}" height="${e.depth}" fill="${e.color}" fill-opacity=".8" stroke="${active ? "#073e64" : isFixed ? "#526675" : "#1b7066"}" stroke-width="${(active ? 3 : 1) / zoom}" ${isFixed ? 'stroke-dasharray="' + 4 / zoom + " " + 3 / zoom + '"' : ""}/><text x="${e.width / 2}" y="${e.depth / 2}" text-anchor="middle" dominant-baseline="central" fill="#102f3e" font-size="${Math.min(14 / zoom, e.depth * 0.35, e.width / Math.max(3, e.name.length))}" pointer-events="none">${esc(e.name)}</text></g>`;
+      const label = colliding
+        ? `${e.name}。重なり：${[...new Set(collidingPartners)].join("、")}`
+        : e.name;
+      html += `<g data-id="${e.id}" data-fixed="${isFixed}" class="entity ${isFixed !== fixedMode ? "locked" : ""}" transform="translate(${x} ${y})" aria-label="${esc(label)}"><title>${esc(label)}</title><rect width="${e.width}" height="${e.depth}" fill="${e.color}" fill-opacity=".8" stroke="${colliding ? "#d0442d" : active ? "#073e64" : isFixed ? "#526675" : "#1b7066"}" stroke-width="${(colliding ? Math.max(active ? 3 : 2, 2) : active ? 3 : 1) / zoom}" ${colliding ? 'stroke-dasharray="' + 7 / zoom + " " + 3 / zoom + '"' : isFixed ? 'stroke-dasharray="' + 4 / zoom + " " + 3 / zoom + '"' : ""}/><text x="${e.width / 2}" y="${e.depth / 2}" text-anchor="middle" dominant-baseline="central" fill="#102f3e" font-size="${Math.min(14 / zoom, e.depth * 0.35, e.width / Math.max(3, e.name.length))}" pointer-events="none">${esc(e.name)}</text></g>`;
     }
   for (const pt of points)
     html += `<circle cx="${pt.x}" cy="${pt.y}" r="${5 / zoom}" fill="#ef6a43"/>`;
@@ -286,9 +309,10 @@ $("#selected-date").onchange = (event) => selectDate(event.target.value);
 function renderTracks() {
   const project = p(),
     changes = changeDates(project),
+    collisionCount = collisionsAt(project, selectedDate).length,
     dates = [...new Set([...changes, selectedDate])].sort();
   $("#tracks").innerHTML =
-    `<table><thead><tr><th>配置物 / ${project.entities.length}</th>${dates.map((date) => `<th class="${date === selectedDate ? "selected" : ""}"><button data-date="${date}">${date}${!changes.includes(date) ? '<span class="date-note">選択日</span>' : ""}</button></th>`).join("")}</tr></thead><tbody>${project.entities
+    `<table><thead><tr><th>配置物 / ${project.entities.length}</th>${dates.map((date) => { const activeCollision = date === selectedDate && collisionCount > 0; return `<th class="${date === selectedDate ? "selected" : ""}${activeCollision ? " collision-day" : ""}"><button data-date="${date}" aria-label="${date}${date === selectedDate ? "、選択日" : ""}${activeCollision ? `、干渉発生中、${collisionCount}組` : ""}">${date}${!changes.includes(date) ? '<span class="date-note">選択日</span>' : ""}${activeCollision ? '<span class="timeline-warning" aria-hidden="true">⚠</span>' : ""}</button></th>`; }).join("")}</tr></thead><tbody>${project.entities
       .map(
         (e) =>
           `<tr><td>${esc(e.name)}</td>${dates

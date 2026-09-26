@@ -32,7 +32,7 @@
 
 ## 計画・デシジョン・互換性
 
-- 現在の `docs/first-step.md` は初期モックの計画として残す。
+- `docs/first-step.md` は初期版の履歴として残す。現行仕様は `docs/spec/current.md` を参照する。
 - 次の作業計画を `docs/plan/date-anchored-timeline.md` に記録する。
 - `docs/decisions/` に、日付と存在期間、位置キーフレームの継承、旧形式非対応の判断をADRとして記録する。
 - ADRには状態・背景・決定・代替案・影響を記載する。後日の変更では理由を消さず、新しいADRから旧判断の置き換えを参照する。

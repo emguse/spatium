@@ -126,6 +126,27 @@ main {
   flex: 1;
   background: #dce5eb;
 }
+.collision-stamp {
+  position: sticky;
+  top: 12px;
+  z-index: 2;
+  display: block;
+  width: max-content;
+  margin: 12px 0 -46px 12px;
+  padding: 7px 12px;
+  border: 2px solid #b73527;
+  border-radius: 5px;
+  background: #fff0ec;
+  box-shadow: 0 2px 8px #19344638;
+  color: #a52e24;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+.collision-stamp[hidden] {
+  display: none;
+}
 #canvas {
   display: block;
   background: white;
@@ -258,6 +279,21 @@ td button {
 th.selected,
 td.selected {
   background: #e5f4f0;
+}
+th.collision-day,
+th.selected.collision-day {
+  background: #ffe4df;
+  color: #a52e24;
+}
+th.collision-day button {
+  color: inherit;
+  font-weight: 700;
+}
+.timeline-warning {
+  display: inline-block;
+  margin-left: 5px;
+  color: #b73527;
+  font-weight: 900;
 }
 .present {
   color: #167d6c;
