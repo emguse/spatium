@@ -9,6 +9,7 @@ import {
   duplicateEntity,
   History,
   bounds,
+  collisionsAt,
   snap,
   locked,
   isDate,
@@ -202,6 +203,58 @@ test("bounds use the same dated positions and always include fixed objects", () 
   assert.equal(bounds(p, "2026-09-01").maxY, 9300);
   assert.equal(p.fixed[0].id, fixed);
   assert.equal(locked(p), true);
+});
+test("collisions detect positive-area overlap across movable and fixed objects at a date", () => {
+  const p = fixture();
+  const aId = createEntity(p, "2026-10-01");
+  const a = p.entities[0];
+  a.name = "A";
+  a.width = 500;
+  a.depth = 300;
+  const bId = createEntity(p, "2026-10-01");
+  const b = p.entities[1];
+  b.name = "B";
+  b.width = 200;
+  b.depth = 200;
+  setPosition(b, "2026-10-01", { x: 400, y: 100 });
+  const fixedId = createEntity(p, "2026-10-01", true);
+  const fixed = p.fixed[0];
+  fixed.name = "Fixed";
+  fixed.width = 100;
+  fixed.depth = 100;
+  fixed.x = 450;
+  fixed.y = 150;
+  setPosition(b, "2026-10-02", { x: 1000, y: 1000 });
+  const before = clone(p);
+  assert.deepEqual(collisionsAt(p, "2026-10-01"), [
+    { aId, bId, aName: "A", bName: "B" },
+    { aId, bId: fixedId, aName: "A", bName: "Fixed" },
+    { aId: bId, bId: fixedId, aName: "B", bName: "Fixed" },
+  ]);
+  assert.deepEqual(collisionsAt(p, "2026-10-02"), [
+    { aId, bId: fixedId, aName: "A", bName: "Fixed" },
+  ]);
+  assert.deepEqual(p, before);
+});
+test("collisions exclude edge and corner contact and respect negative positions and origin", () => {
+  const p = fixture();
+  p.grid.origin = { x: 1000, y: -500 };
+  const aId = createEntity(p, "2026-10-01");
+  const a = p.entities[0];
+  a.width = 100;
+  a.depth = 100;
+  const bId = createEntity(p, "2026-10-01");
+  const b = p.entities[1];
+  b.width = 100;
+  b.depth = 100;
+  setPosition(b, "2026-10-01", { x: 100, y: 0 });
+  assert.deepEqual(collisionsAt(p, "2026-10-01"), []);
+  setPosition(b, "2026-10-01", { x: 99, y: 0 });
+  assert.deepEqual(collisionsAt(p, "2026-10-01"), [
+    { aId, bId, aName: a.name, bName: b.name },
+  ]);
+  setPosition(b, "2026-10-01", { x: 100, y: 100 });
+  assert.deepEqual(collisionsAt(p, "2026-10-01"), []);
 });
 test("v2 round trip validates dates, frames, IDs and old format rejection", () => {
   const { p, e } = setup();

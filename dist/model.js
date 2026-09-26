@@ -176,6 +176,39 @@ export function bounds(p, date) {
   }
   return { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY };
 }
+// Return every unordered pair of rectangles with positive-area intersection
+// at the requested date. Touching edges and corners are allowed.
+export function collisionsAt(project, date) {
+  const items = [];
+  for (const e of project.entities) {
+    const pos = positionAt(e, date);
+    if (pos) items.push({ entity: e, x: project.grid.origin.x + pos.x, y: project.grid.origin.y + pos.y });
+  }
+  for (const e of project.fixed) {
+    items.push({ entity: e, x: project.grid.origin.x + e.x, y: project.grid.origin.y + e.y });
+  }
+  const collisions = [];
+  for (let i = 0; i < items.length; i++) {
+    const a = items[i];
+    for (let j = i + 1; j < items.length; j++) {
+      const b = items[j];
+      if (
+        a.x < b.x + b.entity.width &&
+        a.x + a.entity.width > b.x &&
+        a.y < b.y + b.entity.depth &&
+        a.y + a.entity.depth > b.y
+      ) {
+        collisions.push({
+          aId: a.entity.id,
+          bId: b.entity.id,
+          aName: a.entity.name,
+          bName: b.entity.name,
+        });
+      }
+    }
+  }
+  return collisions;
+}
 export function validate(value) {
   const fail = () => {
     throw Error("プロジェクトの形式・値・ID参照が不正です。");
